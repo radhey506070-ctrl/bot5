@@ -1,0 +1,42 @@
+name: Zone Scan
+on:
+  schedule:
+    - cron: "30 4-10 * * 1-5"   # Mon-Fri, 10:00 AM se 4:00 PM IST, har ghante
+  workflow_dispatch:             # manual "Run workflow" button
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: zone-scan
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install flask requests pandas
+      - run: |
+          mkdir site
+          cp -r docs/. site/
+          echo "SITE_URL=https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+      - run: python scan.py
+        env:
+          UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}
+      - run: node alert.js
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
