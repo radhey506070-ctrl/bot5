@@ -1,0 +1,156 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Zone Scanner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1520;color:#e8e8e8;font-family:system-ui,sans-serif;text-align:center}
+h1{margin:24px 0 4px;color:#cfcfcf}.sub{color:#9aa5b1;font-size:14px}
+.gear{position:absolute;right:14px;top:14px;background:none;border:1px solid #8a94a0;color:#cbd2d9;border-radius:10px;padding:8px 12px;cursor:pointer}
+.row{display:flex;gap:12px;justify-content:center;padding:16px 12px 0;flex-wrap:wrap}
+.seg{display:flex;border:1px solid #8a94a0;border-radius:12px;padding:4px;gap:4px}
+.seg button{background:none;border:0;color:#cbd2d9;padding:10px 16px;border-radius:9px;font-size:14px;cursor:pointer}
+.seg button.on{background:#c9a227;color:#111;font-weight:600}
+.tabs{display:flex;flex-wrap:wrap;gap:10px 16px;padding:22px 16px 10px;border-bottom:1px solid #2a3642;justify-content:center}
+.tabs span{color:#aab3bd;cursor:pointer;white-space:nowrap;padding-bottom:8px}
+.tabs span.on{color:#c9a227;border-bottom:2px solid #c9a227}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:16px;max-width:900px;margin:auto}
+.tile{display:block;text-decoration:none;color:#fff;background:linear-gradient(145deg,#142435,#0d1824);border:1px solid #223244;border-radius:6px;padding:14px 8px;min-height:92px}
+.tile b{display:block;font-size:15px;letter-spacing:.5px}.tile small{display:block;color:#9aa5b1;margin-top:5px;font-size:12px}
+.tr{display:flex;justify-content:center;gap:8px;margin-top:8px;font-size:11px}.tr i{font-style:normal;padding:2px 6px;border-radius:8px;background:#1b2a3a}
+.U{color:#4ade80}.Dn{color:#ff6b6b}.S{color:#f5c542}
+.in{color:#4ade80!important}.bad{color:#f59e0b!important}.demand b{color:#6ee7a0}.supply b{color:#ff8a8a}
+.ov{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
+.card{background:#12202f;border:1px solid #c9a227;border-radius:12px;max-width:420px;width:100%;max-height:85vh;overflow:auto;padding:16px;text-align:left}
+.card h3{margin:0 0 4px;color:#c9a227}.card p{margin:10px 0 6px;color:#9aa5b1;font-size:13px}
+.al,.fld{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #223244;font-size:14px;gap:8px}
+.card select{background:#0b1520;color:#fff;border:1px solid #3a4a5a;border-radius:6px;padding:6px}
+.sec{margin:16px 0 2px;color:#c9a227;font-size:12px;letter-spacing:.6px;text-transform:uppercase}
+.trd{color:#8fb4d9!important}
+.wlb{right:auto;left:14px}.star{position:absolute;right:8px;top:6px;cursor:pointer;color:#6b7785;font-size:16px}.star.on{color:#c9a227}.tile{position:relative}
+.chip{background:#1b2a3a;border-radius:14px;padding:4px 10px;font-size:13px;cursor:pointer}.chip[data-x]:after{content:" \00d7";color:#ff8a8a}
+.card input[type=text]{background:#0b1520;color:#fff;border:1px solid #3a4a5a;border-radius:6px;padding:8px;width:100%}
+.card .mini{padding:8px 14px;border:0;border-radius:8px;background:#c9a227;font-weight:600;cursor:pointer}
+.chk{display:flex;flex-wrap:wrap;gap:10px}.chk label{font-size:14px}
+.card input[type=number]{width:80px;background:#0b1520;color:#fff;border:1px solid #3a4a5a;border-radius:6px;padding:6px}
+.btns{display:flex;gap:8px;margin-top:14px}.btns button{flex:1;padding:10px;border:0;border-radius:8px;background:#c9a227;font-weight:600;cursor:pointer}
+.btns button.g{background:#2a3a4a;color:#fff}
+</style></head><body>
+<button class="gear" onclick="openSet()">&#9881; Settings</button><button class="gear wlb" onclick="openWL()">&#9733; Watchlist</button>
+<h1>Zone Scanner</h1><div class="sub" id="st">Loading...</div>
+<div class="row">
+ <div class="seg" id="crit"><button data-v="approach">Approaching</button><button data-v="zone" class="on">In Zone / Reacting</button></div>
+ <div class="seg" id="zone"><button data-v="demand">Demand</button><button data-v="supply" class="on">Supply</button></div>
+</div>
+<div class="tabs" id="tfs"></div><div class="grid" id="g"></div>
+
+<div class="ov" id="ov"><div class="card"><h3>&#9888; Zone ke paas price</h3><p id="ovs"></p><div id="ovl"></div>
+<div class="btns"><button onclick="ov.style.display='none'">Close</button></div></div></div>
+
+<div class="ov" id="wl"><div class="card"><h3>&#9733; My Watchlist</h3>
+<p>Add karke Save dabayein. "Only watchlist" ON hone par sirf in stocks ke tiles aur popup dikhenge.</p>
+<div class="fld"><span><b>Only watchlist ON</b></span><input type="checkbox" id="wlOn"></div>
+<p>Stock naam likhein (ek ya kai, comma se alag)</p>
+<div style="display:flex;gap:8px"><input type="text" id="wlIn" list="symlist" placeholder="HDFCBANK, SBIN"><button class="mini" onclick="wlAdd()">Add</button></div>
+<datalist id="symlist"></datalist>
+<p>Aapki list (dabane par hat jayega)</p><div class="chk" id="wlChips"></div>
+<div class="btns"><button onclick="wlSave()">Save &amp; Close</button></div></div></div>
+<div class="ov" id="set"><div class="card" style="max-width:520px"><h3>Settings</h3><div id="sform"></div>
+<div class="btns"><button onclick="applySet()">Apply</button><button class="g" onclick="resetSet()">Reset</button><button class="g" onclick="set.style.display='none'">Cancel</button></div>
+</div></div>
+<script src="zones.js"></script>
+<script>
+const TFS=["1m","3m","5m","10m","15m","30m","1h","2h","4h","Daily","Weekly","Monthly","Quarterly","Half Yearly","Yearly"],DEF=ZN.DEF;
+let S=JSON.parse(JSON.stringify(DEF)),WL={list:[],on:false};
+try{const x=JSON.parse(localStorage.getItem("zs4")||"{}");S={...S,...x,pats:{...S.pats,...(x.pats||{})}}}catch(e){}
+try{WL={...WL,...JSON.parse(localStorage.getItem("wl4")||"{}")}}catch(e){}
+let s={tf:"Weekly",crit:"zone",zone:"supply"},D=null,CD={},CACHE={};
+const $=id=>document.getElementById(id),f2=x=>x.toFixed(2);
+$("tfs").innerHTML=TFS.map(t=>`<span data-v="${t}" class="${t==s.tf?'on':''}">${t}</span>`).join("");
+function bind(id,key){$(id).onclick=e=>{const v=e.target.dataset.v;if(!v)return;s[key]=v;
+ [...$(id).children].forEach(c=>c.classList.toggle("on",c.dataset.v==v));render()}}
+bind("crit","crit");bind("zone","zone");bind("tfs","tf");
+async function ensure(tf){if(CD[tf])return;try{CD[tf]=await (await fetch(`c_${tf.replace(/ /g,"_")}.json?`+Date.now())).json()}catch(e){CD[tf]={}}}
+function zonesFor(tf){const k=tf+JSON.stringify({...S,near:0,pop:0});
+ if(CACHE[k])return CACHE[k];const o={};
+ for(const [sym,cd] of Object.entries(CD[tf]||{})){const r=ZN.zoneScan(cd,S);if(r)o[sym]=r}
+ return CACHE[k]=o}
+const TL={U:["&#9650; Up","U"],D:["&#9660; Down","Dn"],S:["&#9654; Side","S"]};
+const trendRow=t=>'<div class="tr">'+[["D","Daily"],["W","Weekly"],["M","Monthly"]].map(([a,f])=>{const x=TL[t[f]];
+ return x?`<i class="${x[1]}">${a} ${x[0]}</i>`:`<i>${a} -</i>`}).join("")+'</div>';
+const STATE=["Fresh","LIVE (retested)","SL HIT","TARGET HIT"];
+const gwl=()=>(D&&D.watchlist)||[],inWL=sym=>WL.list.includes(sym)||gwl().includes(sym),wlOK=sym=>!WL.on||inWL(sym);
+
+async function render(){
+ if(!D)return;await ensure(s.tf);const out=[];
+ for(const [sym,v] of Object.entries(zonesFor(s.tf))){if(!wlOK(sym))continue;
+  const b=ZN.pick(v,s.zone,s.crit,S);if(b)out.push({sym,b,tr:(D.trend||{})[sym]||{}})}
+ out.sort((a,b)=>a.b.dist-b.b.dist);
+ $("st").textContent=`Updated: ${D.updated} | ${D.total} F&O stocks | ${out.length} match${WL.on?` | Watchlist ON (${new Set([...WL.list,...gwl()]).size})`:''}`;
+ $("g").innerHTML=out.map(({sym,b,tr})=>`<a class="tile ${s.zone}" target="_blank" href="https://in.tradingview.com/chart/?symbol=NSE:${sym}">
+ <span class="star ${inWL(sym)?'on':''}" data-s="${sym}">${inWL(sym)?'&#9733;':'&#9734;'}</span>
+ <b>${sym}</b><small>${f2(b.bot)} - ${f2(b.top)}</small>
+ <small class="${b.touch?'in':''}">${b.touch?'IN ZONE':f2(b.dist)+'% away'}</small>
+ <small class="${b.state?'bad':''}">${STATE[b.state]} | LTP ${f2(b.c)}</small>
+ <small class="trd">E ${f2(b.entry)} | SL ${f2(b.sl)} | TP ${f2(b.tp)}</small>${trendRow(tr)}</a>`).join("")||
+ `<div class="sub">${WL.on&&!inWL('')&&!WL.list.length&&!gwl().length?'Watchlist khali hai - &#9733; Watchlist se stock add karein':'Koi stock match nahi hua'}</div>`;
+}
+$("g").onclick=e=>{const sym=e.target.dataset&&e.target.dataset.s;if(!sym)return;e.preventDefault();if(gwl().includes(sym))return alert(sym+" GitHub ki config.json watchlist mein hai - wahin se hatayein");
+ WL.list=WL.list.includes(sym)?WL.list.filter(x=>x!=sym):[...WL.list,sym];wlStore();render()};
+async function popup(){const L=[],tfs=S.pop||D.alert_tfs||["Weekly"];await Promise.all(tfs.map(ensure));
+ for(const tf of tfs)for(const [sym,v] of Object.entries(zonesFor(tf))){if(!wlOK(sym))continue;
+  for(const zt of ["demand","supply"]){const b=ZN.pick(v,zt,"approach",S);if(b)L.push({sym,tf,zt,dist:b.dist})}}
+ if(!L.length)return;L.sort((a,b)=>a.dist-b.dist);
+ $("ovs").textContent=`${L.length} stock zone ke paas (${S.near}% ke andar)${WL.on?' - sirf watchlist':''}`;
+ $("ovl").innerHTML=L.map(i=>`<div class="al"><b class="${i.zt}">${i.sym}</b><span>${i.tf} ${i.zt} | ${f2(i.dist)}% away</span></div>`).join("");
+ $("ov").style.display="flex"}
+
+/* ---- Watchlist ---- */
+const wlStore=()=>{try{localStorage.setItem("wl4",JSON.stringify(WL))}catch(e){}};
+function wlChips(){$("wlChips").innerHTML=gwl().map(x=>`<span class="chip" style="cursor:default" title="GitHub config.json se">${x} (GitHub)</span>`).join("")+WL.list.filter(x=>!gwl().includes(x)).map(x=>`<span class="chip" data-x="${x}">${x}</span>`).join("")||'<span class="sub">Abhi koi stock nahi</span>'}
+function openWL(){$("wlOn").checked=WL.on;$("symlist").innerHTML=(D&&D.symbols||[]).map(x=>`<option value="${x}">`).join("");wlChips();$("wl").style.display="flex"}
+function wlAdd(){const known=(D&&D.symbols)||[],bad=[];
+ for(const x of $("wlIn").value.toUpperCase().split(/[\s,]+/).filter(Boolean)){
+  if(known.length&&!known.includes(x))bad.push(x);else if(!WL.list.includes(x))WL.list.push(x)}
+ $("wlIn").value="";wlChips();if(bad.length)alert("F&O list mein nahi mile: "+bad.join(", "))}
+$("wlChips").onclick=e=>{const x=e.target.dataset.x;if(x){WL.list=WL.list.filter(y=>y!=x);wlChips()}};
+function wlSave(){WL.on=$("wlOn").checked;wlStore();$("wl").style.display="none";render();popup()}
+
+/* ---- Settings: Pine indicator ke sabhi sections ---- */
+const SEC=[
+["1. Base Candle Settings",[["bases","","bases"],["baseMax","Maximum Base Body %","n"],["openEdge","RBR Red Base / DBD Green Base: Use Open Price As Zone Edge","b"],["zoneEdge","Zone Edge: Supply = Base Low / Demand = Base High","b"]]],
+["2. Leg-In / Leg-Out Settings",[["legBodyOn","Use Leg Minimum Body % Filter (of Full Candle)","b"],["legIn","Leg-In Minimum Body %","n"],["legOut","Leg-Out Minimum Body %","n"],["legLarger","Leg-In & Leg-Out Must Be Larger Than Base","b"],["legBasis","Leg vs Base Size Compare By","s",["Body","Full Candle Range"]],["legInMultOn","Leg-In Must Be X Times Bigger Than Base","b"],["legInMult","Leg-In Multiplier (x)","sn",[1,2,3,4,5,6,7,8,9]],["legOutMultOn","Leg-Out Must Be X Times Bigger Than Base","b"],["legOutMult","Leg-Out Multiplier (x)","sn",[1,2,3,4,5,6,7,8,9]],["noWick","Leg-Out Shadow Base Body Me Aaye To Zone Na Bane","b"],["volOn","Leg-Out Volume Filter (Leg-In Volume Ka X%)","b"],["volPct","Leg-Out Minimum Volume % (of Leg-In Volume)","n"]]],
+["3. Pattern Settings",[["pats","","pats"]]],
+["4. Continuation Confirmation",[["confBars","Confirmation Window (Bars, 1-20)","n"],["confBody","Continuation Candle Minimum Body %","n"],["cancelEnter","Cancel Setup If Price Enters Zone Before Confirmation","b"]]],
+["5. Zone Filters",[["curPrice","Demand Below / Supply Above Current Price","b"],["seq","Sequential Zone Filter","b"]]],
+["6. Retest & Signals",[["retestOn","Enable Retest Signals (Trade Entry)","b"],["retestDir","Retest Candle Direction Confirmation","b"],["touchTol","Retest Touch Tolerance (price points)","n"],["slWick","SL / TP Hit On Wick (Off = Candle Close)","b"]]],
+["6A. Entry / SL Buffer / RR Target",[["slBufOn","Enable SL Buffer","b"],["slBuf","SL Buffer (% of Entry Price)","n"],["rr","Risk : Reward (Target RR)","n"],["oneTrade","One Trade At A Time (Skip & Hide New Retests While A Trade Is Open)","b"]]],
+["7. Display Settings",[["maxZ","Maximum Zones","n"],["disp","Zone Display Mode (Both = Fresh + Live | Tested Only = Live + SL/TP closed)","s",["Both","Fresh Only","Tested Only"]]]],
+["8. EMA Trend Filter",[["emaOn","Enable EMA Filter (BUY: Entry Above EMA | SELL: Entry Below EMA)","b"],["emaLen","EMA Length","n"],["emaRemove","Zone Touch Par EMA Valid Na Ho To Zone Hata Do","b"]]],
+["9. Scanner",[["look","Lookback bars (max 150)","n"],["near","Approaching / popup distance %","n"],["pop","","pop"]]]];
+const chk=(cls,val,on,txt)=>`<label><input type="checkbox" class="${cls}" value="${val}" ${on?'checked':''}> ${txt}</label>`;
+function openSet(){const pop=S.pop||(D&&D.alert_tfs)||["Weekly"];
+ $("sform").innerHTML=SEC.map(([title,rows])=>`<div class="sec">${title}</div>`+rows.map(([k,t,ty,o])=>{
+  if(ty=="bases")return `<div class="chk" style="padding:8px 0">${[1,2,3,4,5].map(n=>chk("cb",n,S.bases.includes(n),n+" Base Candle"+(n>1?"s":""))).join("")}</div>`;
+  if(ty=="pats")return `<div class="chk" style="padding:8px 0">${[["RBR","Demand"],["DBR","Demand"],["DBD","Supply"],["RBD","Supply"]].map(([p,z])=>chk("cpat",p,S.pats[p],`${p} - ${z}`)).join("")}</div>`;
+  if(ty=="pop")return `<div class="fld"><span>Popup timeframes</span></div><div class="chk">${TFS.map(x=>chk("cp",x,pop.includes(x),x)).join("")}</div>`;
+  if(ty=="b")return `<div class="fld"><span>${t}</span><input type="checkbox" id="f_${k}" ${S[k]?'checked':''}></div>`;
+  if(ty=="s"||ty=="sn")return `<div class="fld"><span>${t}</span><select id="f_${k}">${o.map(x=>`<option ${S[k]==x?'selected':''}>${x}</option>`).join("")}</select></div>`;
+  return `<div class="fld"><span>${t}</span><input type="number" step="any" id="f_${k}" value="${S[k]}"></div>`}).join("")).join("");
+ $("set").style.display="flex"}
+function applySet(){const n={...S};
+ for(const [,rows] of SEC)for(const [k,,ty] of rows){
+  if(ty=="bases")n[k]=[...document.querySelectorAll(".cb:checked")].map(x=>+x.value);
+  else if(ty=="pats"){n[k]={};document.querySelectorAll(".cpat").forEach(x=>n[k][x.value]=x.checked)}
+  else if(ty=="pop")n[k]=[...document.querySelectorAll(".cp:checked")].map(x=>x.value);
+  else if(ty=="b")n[k]=$("f_"+k).checked;
+  else if(ty=="s")n[k]=$("f_"+k).value;
+  else{const v=parseFloat($("f_"+k).value);n[k]=isNaN(v)?DEF[k]:v}}
+ if(!n.bases.length)return alert("Kam se kam 1 base candle chunein");
+ if(!Object.values(n.pats).some(Boolean))return alert("Kam se kam 1 pattern chunein");
+ n.confBars=Math.min(20,Math.max(1,Math.round(n.confBars)));n.look=Math.min(150,Math.max(5,Math.round(n.look)));
+ n.maxZ=Math.min(200,Math.max(1,Math.round(n.maxZ)));n.emaLen=Math.max(1,Math.round(n.emaLen));
+ S=n;try{localStorage.setItem("zs4",JSON.stringify(S))}catch(e){}
+ $("set").style.display="none";render();popup()}
+function resetSet(){S=JSON.parse(JSON.stringify(DEF));try{localStorage.removeItem("zs4")}catch(e){}openSet()}
+
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{D=d;if(d.watchlist_only&&!localStorage.getItem("wl4"))WL.on=true;render();popup()})
+ .catch(()=>$("st").textContent="Data nahi mila - Actions mein pehle ek baar Run workflow karein");
+</script></body></html>
