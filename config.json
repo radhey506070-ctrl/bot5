@@ -1,15 +1,20 @@
 {
   "alert_timeframes": [
+    "Weekly",
     "15m"
   ],
   "alert_distance_pct": 1,
-  "ltp_url": "https://ltp-proxy.radhey506070.workers.dev/",
-  "ltp_seconds": 8,
-  "mode": "intraday",
+  "ltp_url": "https://ltp-proxy.radhey506070.workers.dev",
+  "ltp_seconds": 15,
+  "mode": "full",
   "max_stocks": 60,
-  "universe": "fno",
+  "universe": "both",
   "intraday_for": "watchlist",
-  "watchlist": [],
+  "watchlist": [
+    "HDFCBANK",
+    "SBIN",
+    "RELIANCE"
+  ],
   "watchlist_only": false,
   "bases": [
     1,
