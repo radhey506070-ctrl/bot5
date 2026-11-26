@@ -57,10 +57,12 @@ def nifty500_symbols():
                 return syms
         except Exception as e:
             print("Nifty 500 fetch error:", url, e)
-    if os.path.exists("nifty500.csv"):
-        syms = parse_symbols(open("nifty500.csv", encoding="utf-8").read())
-        print("nifty500.csv se list li:", len(syms))
-        return syms
+    for fn in ("nifty500.csv", "ind_nifty500list.csv"):   # NSE se download ki hui file ka koi bhi naam chalega
+        if os.path.exists(fn):
+            syms = parse_symbols(open(fn, encoding="utf-8-sig", errors="ignore").read())
+            print(fn, "se list li:", len(syms))
+            if syms:
+                return syms
     print("WARNING: Nifty 500 list nahi mili - repo mein nifty500.csv daalein. Abhi sirf F&O scan hoga.")
     return []
 
