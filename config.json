@@ -1,9 +1,13 @@
 {
   "alert_timeframes": [
-    "Weekly"
+    "15m"
   ],
   "alert_distance_pct": 1,
-  "universe": "both",
+  "ltp_url": "",
+  "ltp_seconds": 8,
+  "mode": "intraday",
+  "max_stocks": 60,
+  "universe": "fno",
   "intraday_for": "watchlist",
   "watchlist": [],
   "watchlist_only": false,
@@ -53,5 +57,12 @@
   "emaOn": true,
   "emaLen": 20,
   "emaRemove": true,
-  "look": 100
+  "look": 100,
+  "live": {
+    "ltp_seconds": 6,
+    "candle_gap": 2.0,
+    "page_refresh": 8,
+    "other_chunk": 20,
+    "max_stocks": 250
+  }
 }

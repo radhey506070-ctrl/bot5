@@ -16,6 +16,7 @@ NIFTY500_URLS = [  # pehla jo chale; sab fail ho to repo ki nifty500.csv use hot
     "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
     "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv",
 ]
+INTRA_TFS = ["1m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h"]
 ALL_TFS = ["1m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "Daily", "Weekly", "Monthly", "Quarterly", "Half Yearly", "Yearly"]
 _lock, _last = threading.Lock(), [0.0]
 
@@ -150,14 +151,15 @@ def trend(df):
     return "U" if c.iloc[-1] > e20 > e50 else "D" if c.iloc[-1] < e20 < e50 else "S"
 
 
-def process(item, intraday):
+def process(item, intraday, full=True):
     sym, key = item
     out = {}
     try:
-        d, w, m = frame(hist(key, "days", 1, 730)), frame(hist(key, "weeks", 1, 1825)), frame(hist(key, "months", 1, 5475))
-        out.update({"Daily": d, "Weekly": w, "Monthly": m})
-        if len(m) > 10:
-            out.update({"Quarterly": rs_months(m, 3), "Half Yearly": rs_months(m, 6), "Yearly": rs_months(m, 12)})
+        if full:
+            d, w, m = frame(hist(key, "days", 1, 730)), frame(hist(key, "weeks", 1, 1825)), frame(hist(key, "months", 1, 5475))
+            out.update({"Daily": d, "Weekly": w, "Monthly": m})
+            if len(m) > 10:
+                out.update({"Quarterly": rs_months(m, 3), "Half Yearly": rs_months(m, 6), "Yearly": rs_months(m, 12)})
         if intraday:
             m1 = frame(intra(key, "minutes", 1))
             out["1m"], out["3m"] = m1, rs_min(m1, 3)
@@ -180,16 +182,26 @@ def main():
     fno, eq = load_instruments()
     n500 = nifty500_symbols() if universe != "fno" else []
     stocks, fno_set, n500_set = build_universe(fno, eq, n500, universe)
+    mode_cfg = cfg.get("mode", "full")                # full | intraday (sirf intraday timeframes)
     mode = cfg.get("intraday_for", "watchlist")       # watchlist | fno | none
     wl = {str(x).upper() for x in cfg.get("watchlist", [])}
     intra_set = {"watchlist": wl & set(stocks), "fno": fno_set}.get(mode, set())
-    est = len(stocks) * 3 + len(intra_set) * 5
+    full = mode_cfg != "intraday"
+    if not full:   # sirf intraday: pehle watchlist, phir F&O, phir baaki; limit ke andar rakhne ke liye trim
+        order = [x for x in stocks if x in wl] + [x for x in stocks if x in fno_set and x not in wl] + [x for x in stocks if x not in wl and x not in fno_set]
+        maxn = int(cfg.get("max_stocks", 380))
+        if len(order) > maxn:
+            print(f"WARNING: {len(order)} stocks mein se pehle {maxn} hi scan honge (Upstox limit). max_stocks / universe badlein")
+            order = order[:maxn]
+        stocks = {x: stocks[x] for x in order}
+        fno_set, n500_set, intra_set = fno_set & set(stocks), n500_set & set(stocks), set(stocks)
+    est = len(stocks) * 3 + len(intra_set) * 5 if full else len(stocks) * 5
     print(f"Stocks: {len(stocks)} (F&O {len(fno_set)}, Nifty500 {len(n500_set)}) | intraday: {mode} ({len(intra_set)} stocks) | ~{est} API calls")
     if est > 1900:
         print("WARNING: Upstox limit 2000 calls / 30 min hai - universe ya intraday_for kam karein")
     cand, trends = {tf: {} for tf in ALL_TFS}, {}
     with ThreadPoolExecutor(6) as ex:
-        for n, (sym, frames) in enumerate(ex.map(lambda it: process(it, it[0] in intra_set), stocks.items()), 1):
+        for n, (sym, frames) in enumerate(ex.map(lambda it: process(it, it[0] in intra_set, full), stocks.items()), 1):
             if all(tf in frames and len(frames[tf]) > 50 for tf in ("Daily", "Weekly", "Monthly")):
                 trends[sym] = {tf: trend(frames[tf]) for tf in ("Daily", "Weekly", "Monthly")}
             for tf, df in frames.items():
@@ -198,16 +210,17 @@ def main():
                     cand[tf][sym]["v"] = [int(x) if x == x else 0 for x in df["v"].values[-KEEP:]]
             if n % 20 == 0:
                 print(n, "/", len(stocks))
-    if sum(len(cand[tf]) for tf in ("Daily", "Weekly", "Monthly")) == 0:
+    if sum(len(cand[tf]) for tf in (("Daily", "Weekly", "Monthly") if full else ("5m", "1h"))) == 0:
         sys.exit("Koi data nahi mila - token ya API check karein")  # site purani hi rahegi
     os.makedirs(OUT, exist_ok=True)
-    for tf in ALL_TFS:
+    tfs_out = ALL_TFS if full else INTRA_TFS
+    for tf in tfs_out:
         with open(f"{OUT}/c_{tf.replace(' ', '_')}.json", "w") as f:
             json.dump(cand[tf], f, separators=(",", ":"))
     ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
     with open(f"{OUT}/data.json", "w") as f:
         json.dump({"updated": dt.datetime.now(ist).strftime("%d %b %Y, %I:%M %p IST"), "total": len(stocks),
-                   "trend": trends, "symbols": sorted(stocks), "fno": sorted(fno_set), "n500": sorted(n500_set), "watchlist": [str(x).upper() for x in cfg.get("watchlist", [])], "watchlist_only": bool(cfg.get("watchlist_only", False)), "alert_tfs": cfg["alert_timeframes"], "alert_pct": cfg["alert_distance_pct"]}, f)
+                   "trend": trends, "gen": int(time.time()), "keys": stocks, "ltp_url": cfg.get("ltp_url", ""), "ltp_seconds": cfg.get("ltp_seconds", 8), "mode": "full" if full else "intraday", "tfs": tfs_out, "symbols": sorted(stocks), "fno": sorted(fno_set), "n500": sorted(n500_set), "watchlist": [str(x).upper() for x in cfg.get("watchlist", [])], "watchlist_only": bool(cfg.get("watchlist_only", False)), "alert_tfs": cfg["alert_timeframes"], "alert_pct": cfg["alert_distance_pct"]}, f)
     print("Done")
 
 
