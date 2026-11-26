@@ -3,7 +3,8 @@
     "Weekly"
   ],
   "alert_distance_pct": 1,
-  "intraday": true,
+  "universe": "both",
+  "intraday_for": "watchlist",
   "watchlist": [],
   "watchlist_only": false,
   "bases": [
