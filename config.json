@@ -3,7 +3,7 @@
     "15m"
   ],
   "alert_distance_pct": 1,
-  "ltp_url": "",
+  "ltp_url": "https://ltp-proxy.radhey506070.workers.dev/",
   "ltp_seconds": 8,
   "mode": "intraday",
   "max_stocks": 60,
