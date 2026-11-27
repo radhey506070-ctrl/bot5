@@ -8,7 +8,8 @@ h1{margin:24px 0 4px;color:#cfcfcf}.sub{color:#9aa5b1;font-size:14px}
 .seg{display:flex;border:1px solid #8a94a0;border-radius:12px;padding:4px;gap:4px}
 .seg button{background:none;border:0;color:#cbd2d9;padding:10px 16px;border-radius:9px;font-size:14px;cursor:pointer}
 .seg button.on{background:#c9a227;color:#111;font-weight:600}
-.tabs{display:flex;flex-wrap:wrap;gap:10px 16px;padding:22px 16px 10px;border-bottom:1px solid #2a3642;justify-content:center}
+.tabs{display:flex;flex-wrap:wrap;gap:10px 16px;padding:14px 16px 8px;margin-top:6px;border-bottom:1px solid #2a3642;justify-content:center}
+.tabs .sep{color:#3a4a5a;cursor:default}
 .tabs span{color:#aab3bd;cursor:pointer;white-space:nowrap;padding-bottom:8px}
 .tabs span.on{color:#c9a227;border-bottom:2px solid #c9a227}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:16px;max-width:900px;margin:auto}
@@ -28,24 +29,27 @@ h1{margin:24px 0 4px;color:#cfcfcf}.sub{color:#9aa5b1;font-size:14px}
 .chip{background:#1b2a3a;border-radius:14px;padding:4px 10px;font-size:13px;cursor:pointer}.chip[data-x]:after{content:" \00d7";color:#ff8a8a}
 .card input[type=text]{background:#0b1520;color:#fff;border:1px solid #3a4a5a;border-radius:6px;padding:8px;width:100%}
 .card .mini{padding:8px 14px;border:0;border-radius:8px;background:#c9a227;font-weight:600;cursor:pointer}
+.tile small .age{color:#6b7785}#toast{display:none;position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#c9a227;color:#111;padding:10px 16px;border-radius:10px;font-weight:600;z-index:20;max-width:90%}
 .chk{display:flex;flex-wrap:wrap;gap:10px}.chk label{font-size:14px}
 .card input[type=number]{width:80px;background:#0b1520;color:#fff;border:1px solid #3a4a5a;border-radius:6px;padding:6px}
 .btns{display:flex;gap:8px;margin-top:14px}.btns button{flex:1;padding:10px;border:0;border-radius:8px;background:#c9a227;font-weight:600;cursor:pointer}
 .btns button.g{background:#2a3a4a;color:#fff}
 </style></head><body>
-<button class="gear" onclick="openSet()">&#9881; Settings</button><button class="gear wlb" onclick="openWL()">&#9733; Watchlist</button>
+<button class="gear" onclick="openSet()">&#9881; Settings</button><button class="gear wlb" onclick="openWL()">&#9733; Watchlist</button><button class="gear wlb" style="top:58px" onclick="enableAlerts()">&#128276; Alerts</button><div id="toast"></div>
 <h1>Zone Scanner</h1><div class="sub" id="st">Loading...</div>
+<div class="tabs" id="tfs"></div>
 <div class="row">
  <div class="seg" id="crit"><button data-v="approach">Approaching</button><button data-v="zone" class="on">In Zone / Reacting</button></div>
  <div class="seg" id="zone"><button data-v="demand">Demand</button><button data-v="supply" class="on">Supply</button></div>
+ <div class="seg" id="uni"><button data-v="all" class="on">All</button><button data-v="fno">F&amp;O</button><button data-v="n500">Nifty 500</button></div>
 </div>
-<div class="tabs" id="tfs"></div><div class="grid" id="g"></div>
+<div class="grid" id="g"></div>
 
 <div class="ov" id="ov"><div class="card"><h3>&#9888; Zone ke paas price</h3><p id="ovs"></p><div id="ovl"></div>
 <div class="btns"><button onclick="ov.style.display='none'">Close</button></div></div></div>
 
 <div class="ov" id="wl"><div class="card"><h3>&#9733; My Watchlist</h3>
-<p>Add karke Save dabayein. "Only watchlist" ON hone par sirf in stocks ke tiles aur popup dikhenge.</p>
+<p>F&O aur Nifty 500 ke stocks add kar sakte hain. Add karke Save dabayein. "Only watchlist" ON hone par sirf in stocks ke tiles aur popup dikhenge.</p>
 <div class="fld"><span><b>Only watchlist ON</b></span><input type="checkbox" id="wlOn"></div>
 <p>Stock naam likhein (ek ya kai, comma se alag)</p>
 <div style="display:flex;gap:8px"><input type="text" id="wlIn" list="symlist" placeholder="HDFCBANK, SBIN"><button class="mini" onclick="wlAdd()">Add</button></div>
@@ -61,13 +65,16 @@ const TFS=["1m","3m","5m","10m","15m","30m","1h","2h","4h","Daily","Weekly","Mon
 let S=JSON.parse(JSON.stringify(DEF)),WL={list:[],on:false};
 try{const x=JSON.parse(localStorage.getItem("zs4")||"{}");S={...S,...x,pats:{...S.pats,...(x.pats||{})}}}catch(e){}
 try{WL={...WL,...JSON.parse(localStorage.getItem("wl4")||"{}")}}catch(e){}
-let s={tf:"Weekly",crit:"zone",zone:"supply"},D=null,CD={},CACHE={};
+let s={tf:"Weekly",crit:"zone",zone:"supply",uni:"all"},D=null,CD={},CACHE={},FNO=new Set(),N5=new Set();
 const $=id=>document.getElementById(id),f2=x=>x.toFixed(2);
-$("tfs").innerHTML=TFS.map(t=>`<span data-v="${t}" class="${t==s.tf?'on':''}">${t}</span>`).join("");
+function buildTabs(){const L=(D&&D.tfs)||TFS;
+ if(!L.includes(s.tf))s.tf=(D&&D.mode=="intraday"&&L.includes("15m"))?"15m":L.includes("Weekly")?"Weekly":L[0];
+ $("tfs").innerHTML=L.map(t=>(t=="Daily"&&L.includes("4h")?'<span class="sep">|</span>':'')+`<span data-v="${t}" class="${t==s.tf?'on':''}">${t}</span>`).join("")}
+buildTabs();
 function bind(id,key){$(id).onclick=e=>{const v=e.target.dataset.v;if(!v)return;s[key]=v;
  [...$(id).children].forEach(c=>c.classList.toggle("on",c.dataset.v==v));render()}}
-bind("crit","crit");bind("zone","zone");bind("tfs","tf");
-async function ensure(tf){if(CD[tf])return;try{CD[tf]=await (await fetch(`c_${tf.replace(/ /g,"_")}.json?`+Date.now())).json()}catch(e){CD[tf]={}}}
+bind("crit","crit");bind("zone","zone");bind("tfs","tf");bind("uni","uni");
+async function ensure(tf){if(CD[tf])return;try{CD[tf]=await (await fetch(`c_${tf.replace(/ /g,"_")}.json?`+Date.now())).json()}catch(e){CD[tf]={}}patchLTP()}
 function zonesFor(tf){const k=tf+JSON.stringify({...S,near:0,pop:0});
  if(CACHE[k])return CACHE[k];const o={};
  for(const [sym,cd] of Object.entries(CD[tf]||{})){const r=ZN.zoneScan(cd,S);if(r)o[sym]=r}
@@ -76,28 +83,29 @@ const TL={U:["&#9650; Up","U"],D:["&#9660; Down","Dn"],S:["&#9654; Side","S"]};
 const trendRow=t=>'<div class="tr">'+[["D","Daily"],["W","Weekly"],["M","Monthly"]].map(([a,f])=>{const x=TL[t[f]];
  return x?`<i class="${x[1]}">${a} ${x[0]}</i>`:`<i>${a} -</i>`}).join("")+'</div>';
 const STATE=["Fresh","LIVE (retested)","SL HIT","TARGET HIT"];
-const gwl=()=>(D&&D.watchlist)||[],inWL=sym=>WL.list.includes(sym)||gwl().includes(sym),wlOK=sym=>!WL.on||inWL(sym);
+const gwl=()=>(D&&D.watchlist)||[],inWL=sym=>WL.list.includes(sym)||gwl().includes(sym),wlOK=sym=>!WL.on||inWL(sym),uniOK=sym=>s.uni=='all'||(s.uni=='fno'?FNO:N5).has(sym);
 
 async function render(){
  if(!D)return;await ensure(s.tf);const out=[];
- for(const [sym,v] of Object.entries(zonesFor(s.tf))){if(!wlOK(sym))continue;
+ for(const [sym,v] of Object.entries(zonesFor(s.tf))){if(!wlOK(sym)||!uniOK(sym))continue;
   const b=ZN.pick(v,s.zone,s.crit,S);if(b)out.push({sym,b,tr:(D.trend||{})[sym]||{}})}
  out.sort((a,b)=>a.b.dist-b.b.dist);
- $("st").textContent=`Updated: ${D.updated} | ${D.total} F&O stocks | ${out.length} match${WL.on?` | Watchlist ON (${new Set([...WL.list,...gwl()]).size})`:''}`;
+ $("st").textContent=`${D.live||LTPAT?'\u25CF LIVE price | ':''}${D.ltp_url&&!LTPAT&&!D.live?`\u26A0 price feed: ${LTPERR||'connecting'} | `:''}Updated: ${D.updated}${D.gen&&!D.live?` (candles ${Math.max(0,Math.round((Date.now()/1000-D.gen)/60))}m old)`:''} | ${D.total} stocks | ${out.length} match${WL.on?` | Watchlist ON (${new Set([...WL.list,...gwl()]).size})`:''}`;
  $("g").innerHTML=out.map(({sym,b,tr})=>`<a class="tile ${s.zone}" target="_blank" href="https://in.tradingview.com/chart/?symbol=NSE:${sym}">
  <span class="star ${inWL(sym)?'on':''}" data-s="${sym}">${inWL(sym)?'&#9733;':'&#9734;'}</span>
  <b>${sym}</b><small>${f2(b.bot)} - ${f2(b.top)}</small>
  <small class="${b.touch?'in':''}">${b.touch?'IN ZONE':f2(b.dist)+'% away'}</small>
- <small class="${b.state?'bad':''}">${STATE[b.state]} | LTP ${f2(b.c)}</small>
- <small class="trd">E ${f2(b.entry)} | SL ${f2(b.sl)} | TP ${f2(b.tp)}</small>${trendRow(tr)}</a>`).join("")||
+ <small class="${b.state?'bad':''}">${STATE[b.state]} | LTP ${f2(b.c)}<span class="age">${ageTxt(sym)}</span></small>
+ <small class="trd">E ${f2(b.entry)} | SL ${f2(b.sl)} | TP ${f2(b.tp)}</small>${D.mode=='intraday'?'':trendRow(tr)}</a>`).join("")||
  `<div class="sub">${WL.on&&!inWL('')&&!WL.list.length&&!gwl().length?'Watchlist khali hai - &#9733; Watchlist se stock add karein':'Koi stock match nahi hua'}</div>`;
 }
 $("g").onclick=e=>{const sym=e.target.dataset&&e.target.dataset.s;if(!sym)return;e.preventDefault();if(gwl().includes(sym))return alert(sym+" GitHub ki config.json watchlist mein hai - wahin se hatayein");
  WL.list=WL.list.includes(sym)?WL.list.filter(x=>x!=sym):[...WL.list,sym];wlStore();render()};
-async function popup(){const L=[],tfs=S.pop||D.alert_tfs||["Weekly"];await Promise.all(tfs.map(ensure));
+async function approachList(){const L=[],tfs=S.pop||D.alert_tfs||["Weekly"];await Promise.all(tfs.map(ensure));
  for(const tf of tfs)for(const [sym,v] of Object.entries(zonesFor(tf))){if(!wlOK(sym))continue;
-  for(const zt of ["demand","supply"]){const b=ZN.pick(v,zt,"approach",S);if(b)L.push({sym,tf,zt,dist:b.dist})}}
- if(!L.length)return;L.sort((a,b)=>a.dist-b.dist);
+  for(const zt of ["demand","supply"]){const b=ZN.pick(v,zt,"approach",S);if(b)L.push({sym,tf,zt,dist:b.dist,top:b.top})}}
+ L.sort((a,b)=>a.dist-b.dist);return L}
+async function popup(){const L=await approachList();if(!L.length)return;
  $("ovs").textContent=`${L.length} stock zone ke paas (${S.near}% ke andar)${WL.on?' - sirf watchlist':''}`;
  $("ovl").innerHTML=L.map(i=>`<div class="al"><b class="${i.zt}">${i.sym}</b><span>${i.tf} ${i.zt} | ${f2(i.dist)}% away</span></div>`).join("");
  $("ov").style.display="flex"}
@@ -130,7 +138,7 @@ function openSet(){const pop=S.pop||(D&&D.alert_tfs)||["Weekly"];
  $("sform").innerHTML=SEC.map(([title,rows])=>`<div class="sec">${title}</div>`+rows.map(([k,t,ty,o])=>{
   if(ty=="bases")return `<div class="chk" style="padding:8px 0">${[1,2,3,4,5].map(n=>chk("cb",n,S.bases.includes(n),n+" Base Candle"+(n>1?"s":""))).join("")}</div>`;
   if(ty=="pats")return `<div class="chk" style="padding:8px 0">${[["RBR","Demand"],["DBR","Demand"],["DBD","Supply"],["RBD","Supply"]].map(([p,z])=>chk("cpat",p,S.pats[p],`${p} - ${z}`)).join("")}</div>`;
-  if(ty=="pop")return `<div class="fld"><span>Popup timeframes</span></div><div class="chk">${TFS.map(x=>chk("cp",x,pop.includes(x),x)).join("")}</div>`;
+  if(ty=="pop")return `<div class="fld"><span>Popup timeframes</span></div><div class="chk">${((D&&D.tfs)||TFS).map(x=>chk("cp",x,pop.includes(x),x)).join("")}</div>`;
   if(ty=="b")return `<div class="fld"><span>${t}</span><input type="checkbox" id="f_${k}" ${S[k]?'checked':''}></div>`;
   if(ty=="s"||ty=="sn")return `<div class="fld"><span>${t}</span><select id="f_${k}">${o.map(x=>`<option ${S[k]==x?'selected':''}>${x}</option>`).join("")}</select></div>`;
   return `<div class="fld"><span>${t}</span><input type="number" step="any" id="f_${k}" value="${S[k]}"></div>`}).join("")).join("");
@@ -151,6 +159,34 @@ function applySet(){const n={...S};
  $("set").style.display="none";render();popup()}
 function resetSet(){S=JSON.parse(JSON.stringify(DEF));try{localStorage.removeItem("zs4")}catch(e){}openSet()}
 
-fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{D=d;if(d.watchlist_only&&!localStorage.getItem("wl4"))WL.on=true;render();popup()})
+/* ---- LIVE mode (live_server.py): auto refresh + naye alerts par popup / beep / browser notification ---- */
+let SEEN=null;
+const ageTxt=sym=>{const m=D.ts_intra?(["1m","3m","5m","10m","15m","30m","1h","2h","4h"].includes(s.tf)?D.ts_intra:D.ts_daily):D.ts,t=m&&m[sym];if(!t)return"";const a=Math.max(0,Math.round(Date.now()/1000-t));return " | "+(a<90?a+"s":Math.round(a/60)+"m")+" ago"};
+function toast(msg){const t=$("toast");t.textContent=msg;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",9000)}
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.15;o.start();o.stop(c.currentTime+.25)}catch(e){}}
+function enableAlerts(){beep();if(window.Notification)Notification.requestPermission().then(p=>toast(p=="granted"?"Alerts ON (ye tab khula rakhein)":"Browser alerts blocked"));else toast("Is browser mein notification nahi - popup/beep chalega")}
+const akey=i=>`${i.sym}|${i.tf}|${i.zt}|${Math.round(i.top)}`;
+async function liveAlerts(){const L=await approachList(),keys=new Set(L.map(akey));
+ if(SEEN===null){SEEN=keys;return}
+ const fresh=L.filter(i=>!SEEN.has(akey(i)));SEEN=keys;if(!fresh.length)return;
+ const txt=fresh.map(i=>`${i.sym} ${i.tf} ${i.zt} ${f2(i.dist)}%`).join(", ");toast("Zone ke paas: "+txt);beep();
+ if(window.Notification&&Notification.permission=="granted")new Notification("Zone alert",{body:txt})}
+async function liveTick(){try{
+ D=await (await fetch("data.json?"+Date.now())).json();FNO=new Set(D.fno||[]);N5=new Set(D.n500||[]);
+ await Promise.all([...new Set([s.tf,...(S.pop||D.alert_tfs||[])])].map(async tf=>{try{CD[tf]=await (await fetch(`c_${tf.replace(/ /g,"_")}.json?`+Date.now())).json()}catch(e){}}));
+ patchLTP();CACHE={};await render();await liveAlerts()}catch(e){}}
+/* ---- Live price (Cloudflare Worker): candles GitHub se, price har ~8 sec ---- */
+let LTPM={},LTPAT=0,LTPERR="";
+function patchLTP(){for(const tf in CD){const m=CD[tf];for(const sym in m){const p=LTPM[sym],a=m[sym];if(!p||!a||!a.c||!a.c.length)continue;
+ const n=a.c.length;if(a._h===undefined){a._h=a.h[n-1];a._l=a.l[n-1]}
+ a.c[n-1]=p;a.h[n-1]=Math.max(a._h,p);a.l[n-1]=Math.min(a._l,p)}}}
+async function ltpTick(){if(!D||!D.ltp_url||!D.keys)return;const k2s={},keys=[];
+ for(const [s,k] of Object.entries(D.keys)){k2s[k]=s;k2s["NSE_EQ:"+s]=s;keys.push(k)}
+ const parts=[];for(let i=0;i<keys.length;i+=150)parts.push(keys.slice(i,i+150));
+ try{const res=await Promise.all(parts.map(p=>fetch(D.ltp_url+"?k="+p.map(encodeURIComponent).join(",")).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json()})));
+  let ch=false;for(const o of res)for(const [k,v] of Object.entries(o)){const s=k2s[k];if(s&&v&&LTPM[s]!==+v){LTPM[s]=+v;ch=true}}
+  LTPAT=Date.now();LTPERR="";if(ch){patchLTP();CACHE={};await render();await liveAlerts()}}catch(e){LTPERR=e.message||String(e)}}
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{D=d;buildTabs();FNO=new Set(d.fno||[]);N5=new Set(d.n500||[]);if(d.watchlist_only&&!localStorage.getItem("wl4"))WL.on=true;render();popup();
+  if(d.live)setInterval(liveTick,(d.refresh||8)*1000);else if(d.ltp_url){ltpTick();setInterval(ltpTick,(d.ltp_seconds||8)*1000);setInterval(liveTick,60000)}})
  .catch(()=>$("st").textContent="Data nahi mila - Actions mein pehle ek baar Run workflow karein");
 </script></body></html>

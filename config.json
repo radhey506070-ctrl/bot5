@@ -9,7 +9,7 @@
   "mode": "full",
   "max_stocks": 60,
   "universe": "both",
-  "intraday_for": "watchlist",
+  "intraday_for": "rotate",
   "watchlist": [
     "HDFCBANK",
     "SBIN",
@@ -69,5 +69,7 @@
     "page_refresh": 8,
     "other_chunk": 20,
     "max_stocks": 250
-  }
+  },
+  "rot_intraday": 30,
+  "rot_daily": 20
 }

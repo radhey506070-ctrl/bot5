@@ -176,6 +176,18 @@ def process(item, intraday, full=True):
     return sym, out
 
 
+def fetch_prev(name):
+    """Pichhli baar deploy hui file site se wapas padho (rotate mode mein merge ke liye)."""
+    site = os.environ.get("SITE_URL", "")
+    if not site:
+        return None
+    try:
+        r = requests.get(f"{site}/{name}?t={int(time.time())}", timeout=60)
+        return r.json() if r.ok else None
+    except Exception:
+        return None
+
+
 def main():
     if not TOKEN:
         sys.exit("UPSTOX_TOKEN secret set nahi hai")
@@ -185,11 +197,31 @@ def main():
     n500 = nifty500_symbols() if universe != "fno" else []
     stocks, fno_set, n500_set = build_universe(fno, eq, n500, universe)
     mode_cfg = cfg.get("mode", "full")                # full | intraday (sirf intraday timeframes)
-    mode = cfg.get("intraday_for", "watchlist")       # watchlist | fno | none
+    mode = cfg.get("intraday_for", "watchlist")       # watchlist | fno | rotate | none
     wl = {str(x).upper() for x in cfg.get("watchlist", [])}
-    intra_set = {"watchlist": wl & set(stocks), "fno": fno_set}.get(mode, set())
     full = mode_cfg != "intraday"
-    if not full:   # sirf intraday: pehle watchlist, phir F&O, phir baaki; limit ke andar rakhne ke liye trim
+    rotate = mode == "rotate" and full
+    intra_set = {"watchlist": wl & set(stocks), "fno": fno_set}.get(mode, set())
+    daily_set = set(stocks) if full else set()
+    cand, trends, ts_i, ts_d = {tf: {} for tf in ALL_TFS}, {}, {}, {}
+    if rotate:
+        # Har run mein thode stocks (sabse purane pehle) refresh hote hain, baaki pichhle data se aate hain.
+        with ThreadPoolExecutor(6) as ex:
+            prevs = list(ex.map(lambda tf: fetch_prev(f"c_{tf.replace(' ', '_')}.json") or {}, ALL_TFS))
+        for tf, pv in zip(ALL_TFS, prevs):
+            cand[tf] = {x: v for x, v in pv.items() if x in stocks} if isinstance(pv, dict) else {}
+        pdj = fetch_prev("data.json") or {}
+        ts_i = {x: t for x, t in (pdj.get("ts_intra") or {}).items() if x in stocks}
+        ts_d = {x: t for x, t in (pdj.get("ts_daily") or {}).items() if x in stocks}
+        trends = {x: v for x, v in (pdj.get("trend") or {}).items() if x in stocks}
+        syms = list(stocks)
+        n_i, n_d = int(cfg.get("rot_intraday", 30)), int(cfg.get("rot_daily", 20))
+        wl_in = [x for x in syms if x in wl]
+        rest = sorted((x for x in syms if x not in wl), key=lambda x: ts_i.get(x, 0))
+        intra_set = set(wl_in) | set(rest[:max(0, n_i - len(wl_in))])
+        daily_set = set(sorted(syms, key=lambda x: ts_d.get(x, 0))[:n_d])
+        print(f"Rotate: purane data wale stocks intraday {len(ts_i)}/{len(syms)}, daily {len(ts_d)}/{len(syms)}")
+    elif not full:   # sirf intraday: pehle watchlist, phir F&O, phir baaki; limit ke andar rakhne ke liye trim
         order = [x for x in stocks if x in wl] + [x for x in stocks if x in fno_set and x not in wl] + [x for x in stocks if x not in wl and x not in fno_set]
         maxn = int(cfg.get("max_stocks", 380))
         if len(order) > maxn:
@@ -197,21 +229,29 @@ def main():
             order = order[:maxn]
         stocks = {x: stocks[x] for x in order}
         fno_set, n500_set, intra_set = fno_set & set(stocks), n500_set & set(stocks), set(stocks)
-    est = len(stocks) * 3 + len(intra_set) * 5 if full else len(stocks) * 5
-    print(f"Stocks: {len(stocks)} (F&O {len(fno_set)}, Nifty500 {len(n500_set)}) | intraday: {mode} ({len(intra_set)} stocks) | ~{est} API calls")
-    if est > 1900:
-        print("WARNING: Upstox limit 2000 calls / 30 min hai - universe ya intraday_for kam karein")
-    cand, trends = {tf: {} for tf in ALL_TFS}, {}
+    est = len(intra_set) * 5 + len(daily_set) * 3
+    print(f"Stocks: {len(stocks)} (F&O {len(fno_set)}, Nifty500 {len(n500_set)}) | intraday: {mode} ({len(intra_set)} stocks) | daily+: {len(daily_set)} stocks | ~{est} API calls")
+    if (rotate and est > 320) or est > 1900:
+        print("WARNING: Upstox limit 2000 calls / 30 min hai - rot_intraday / rot_daily ya universe kam karein")
+    now_t = int(time.time())
+    todo = [(x, k) for x, k in stocks.items() if x in intra_set or x in daily_set]
     with ThreadPoolExecutor(6) as ex:
-        for n, (sym, frames) in enumerate(ex.map(lambda it: process(it, it[0] in intra_set, full), stocks.items()), 1):
+        for n, (sym, frames) in enumerate(ex.map(lambda it: process(it, it[0] in intra_set, it[0] in daily_set), todo), 1):
             if all(tf in frames and len(frames[tf]) > 50 for tf in ("Daily", "Weekly", "Monthly")):
                 trends[sym] = {tf: trend(frames[tf]) for tf in ("Daily", "Weekly", "Monthly")}
+            got_i = got_d = False
             for tf, df in frames.items():
                 if len(df) > 8:
                     cand[tf][sym] = {k: [round(float(x), 2) for x in df[k].values[-KEEP:]] for k in "ohlc"}
                     cand[tf][sym]["v"] = [int(x) if x == x else 0 for x in df["v"].values[-KEEP:]]
+                    got_i = got_i or tf in INTRA_TFS
+                    got_d = got_d or tf == "Daily"
+            if got_i:
+                ts_i[sym] = now_t
+            if got_d:
+                ts_d[sym] = now_t
             if n % 20 == 0:
-                print(n, "/", len(stocks))
+                print(n, "/", len(todo))
     if sum(len(cand[tf]) for tf in (("Daily", "Weekly", "Monthly") if full else ("5m", "1h"))) == 0:
         sys.exit("Koi data nahi mila - token ya API check karein")  # site purani hi rahegi
     os.makedirs(OUT, exist_ok=True)
@@ -222,7 +262,12 @@ def main():
     ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
     with open(f"{OUT}/data.json", "w") as f:
         json.dump({"updated": dt.datetime.now(ist).strftime("%d %b %Y, %I:%M %p IST"), "total": len(stocks),
-                   "trend": trends, "gen": int(time.time()), "keys": stocks, "ltp_url": cfg.get("ltp_url", ""), "ltp_seconds": cfg.get("ltp_seconds", 8), "mode": "full" if full else "intraday", "tfs": tfs_out, "symbols": sorted(stocks), "fno": sorted(fno_set), "n500": sorted(n500_set), "watchlist": [str(x).upper() for x in cfg.get("watchlist", [])], "watchlist_only": bool(cfg.get("watchlist_only", False)), "alert_tfs": cfg["alert_timeframes"], "alert_pct": cfg["alert_distance_pct"]}, f)
+                   "trend": trends, "gen": now_t, "ts": ts_i, "ts_intra": ts_i, "ts_daily": ts_d,
+                   "keys": stocks, "ltp_url": cfg.get("ltp_url", ""), "ltp_seconds": cfg.get("ltp_seconds", 8),
+                   "mode": "full" if full else "intraday", "tfs": tfs_out, "symbols": sorted(stocks),
+                   "fno": sorted(fno_set), "n500": sorted(n500_set), "watchlist": sorted(wl),
+                   "watchlist_only": bool(cfg.get("watchlist_only", False)),
+                   "alert_tfs": cfg["alert_timeframes"], "alert_pct": cfg["alert_distance_pct"]}, f)
     print("Done")
 
 
