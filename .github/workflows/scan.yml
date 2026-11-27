@@ -1,7 +1,7 @@
 name: Zone Scan
 on:
   schedule:
-    - cron: "30 4-10 * * 1-5"   # Mon-Fri, 10:00 AM se 4:00 PM IST, har ghante (Upstox limit ke liye)
+    - cron: "*/5 4-10 * * 1-5"   # Mon-Fri, 9:30 AM - 4:00 PM IST, har 5 min (GitHub ka minimum)
   workflow_dispatch:             # manual "Run workflow" button
 permissions:
   contents: read
