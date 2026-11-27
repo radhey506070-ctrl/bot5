@@ -125,6 +125,20 @@ def _agg(g):
     return g.agg(o=("o", "first"), h=("h", "max"), l=("l", "min"), c=("c", "last"), v=("v", "sum"))
 
 
+def agg_key(df, key):
+    return _agg(df.groupby(key))
+
+
+def periods_from_daily(d):
+    """Daily candles se Weekly / Monthly / Quarterly / Half Yearly / Yearly (aaj ki banti hui candle ke saath)."""
+    if d.empty:
+        return {}
+    wk = (d.index.normalize().tz_localize(None) - pd.Timestamp("2000-01-03")).days // 7   # Monday se hafta
+    mk = d.index.year * 12 + d.index.month - 1
+    return {"Daily": d, "Weekly": agg_key(d, wk), "Monthly": agg_key(d, mk), "Quarterly": agg_key(d, mk // 3),
+            "Half Yearly": agg_key(d, mk // 6), "Yearly": agg_key(d, mk // 12)}
+
+
 def rs_months(m, months):
     """Monthly -> Quarterly / Half Yearly / Yearly."""
     return _agg(m.groupby((m.index.year * 12 + m.index.month - 1) // months))
@@ -157,11 +171,16 @@ def process(item, intraday, full=True):
     sym, key = item
     out = {}
     try:
-        if full:
-            d, w, m = frame(hist(key, "days", 1, 730)), frame(hist(key, "weeks", 1, 1825)), frame(hist(key, "months", 1, 5475))
-            out.update({"Daily": d, "Weekly": w, "Monthly": m})
-            if len(m) > 10:
-                out.update({"Quarterly": rs_months(m, 3), "Half Yearly": rs_months(m, 6), "Yearly": rs_months(m, 12)})
+        if full:   # 2 calls: lambi daily history + aaj ki candle; baaki sab timeframe daily se bante hain
+            dh = frame(hist(key, "days", 1, 3600))
+            if dh.empty:
+                dh = frame(hist(key, "days", 1, 1800))
+            today = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30))).date()
+            if len(dh):
+                dh = dh[dh.index.date < today]
+            d = pd.concat([dh, frame(intra(key, "days", 1))])
+            d = d[~d.index.duplicated(keep="last")].sort_index()
+            out.update(periods_from_daily(d))
         if intraday:
             m1 = frame(intra(key, "minutes", 1))
             out["1m"], out["3m"] = m1, rs_min(m1, 3)
@@ -215,7 +234,9 @@ def main():
         ts_d = {x: t for x, t in (pdj.get("ts_daily") or {}).items() if x in stocks}
         trends = {x: v for x, v in (pdj.get("trend") or {}).items() if x in stocks}
         syms = list(stocks)
-        n_i, n_d = int(cfg.get("rot_intraday", 30)), int(cfg.get("rot_daily", 20))
+        n_i, n_d = int(cfg.get("rot_intraday", 30)), int(cfg.get("rot_daily", 60))
+        if len(ts_d) < 0.5 * len(syms):      # shuruaat: pehle badi batch (daily-weekly ka data jaldi bharne ke liye)
+            n_d = int(cfg.get("rot_daily_bootstrap", 300))
         wl_in = [x for x in syms if x in wl]
         rest = sorted((x for x in syms if x not in wl), key=lambda x: ts_i.get(x, 0))
         intra_set = set(wl_in) | set(rest[:max(0, n_i - len(wl_in))])
@@ -229,9 +250,9 @@ def main():
             order = order[:maxn]
         stocks = {x: stocks[x] for x in order}
         fno_set, n500_set, intra_set = fno_set & set(stocks), n500_set & set(stocks), set(stocks)
-    est = len(intra_set) * 5 + len(daily_set) * 3
+    est = len(intra_set) * 5 + len(daily_set) * 2
     print(f"Stocks: {len(stocks)} (F&O {len(fno_set)}, Nifty500 {len(n500_set)}) | intraday: {mode} ({len(intra_set)} stocks) | daily+: {len(daily_set)} stocks | ~{est} API calls")
-    if (rotate and est > 320) or est > 1900:
+    if (rotate and est > 1000) or est > 1900:
         print("WARNING: Upstox limit 2000 calls / 30 min hai - rot_intraday / rot_daily ya universe kam karein")
     now_t = int(time.time())
     todo = [(x, k) for x, k in stocks.items() if x in intra_set or x in daily_set]

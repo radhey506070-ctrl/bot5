@@ -71,5 +71,6 @@
     "max_stocks": 250
   },
   "rot_intraday": 30,
-  "rot_daily": 20
+  "rot_daily": 60,
+  "rot_daily_bootstrap": 300
 }
